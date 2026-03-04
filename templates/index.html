@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Elastic Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 font-sans">
+    <div
+      class="bg-gradient-to-r from-blue-600 to-purple-400 py-12 text-center text-white"
+    >
+      <h1 class="text-6xl font-bold mb-6">Elastic Search</h1>
+
+      <div class="flex justify-center gap-3 px-4">
+        <input
+          id="queryInput"
+          type="text"
+          placeholder="Search..."
+          class="w-2/3 max-w-3xl px-5 py-4 rounded-lg text-black text-lg shadow-md focus:outline-none"
+          onkeydown="if (event.key === 'Enter') search();"
+        />
+        <button
+          onclick="search()"
+          class="bg-blue-600 hover:bg-blue-700 px-6 py-4 rounded-lg font-semibold shadow-md"
+        >
+          Search
+        </button>
+      </div>
+    </div>
+
+    <div id="resultsSection" class="hidden -mt-10 px-8 pb-10">
+      <div class="grid grid-cols-2 gap-6">
+        <div class="bg-white p-6 rounded-lg shadow">
+          <h2 class="font-bold text-lg mb-3">BM25 + PageRank</h2>
+          <p id="infoLeft" class="text-gray-500 mb-4"></p>
+          <div id="bm25Results"></div>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow">
+          <h2 class="font-bold text-lg mb-3">TF-IDF + PageRank</h2>
+          <p id="infoRight" class="text-gray-500 mb-4"></p>
+          <div id="tfidfResults"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function highlight(text, keyword) {
+        const regex = new RegExp(keyword, "gi");
+        return text.replace(
+          regex,
+          "<b class='bg-yellow-200'>" + keyword + "</b>",
+        );
+      }
+
+      function renderResults(results, containerId, keyword) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = "";
+
+        results.forEach((item) => {
+          container.innerHTML += `
+            <div class="mb-6">
+              <h3 class="text-blue-700 text-lg hover:underline cursor-pointer">
+                <a href="${item.url}">${item.title}</a>
+              </h3>
+              <div class="text-green-700 text-sm">${item.url}</div>
+              <p class="text-sm text-gray-700 mt-1 line-clamp-2">
+                ${highlight(item.text, keyword)}
+              </p>
+            </div>
+          `;
+        });
+      }
+
+      async function search() {
+        const query = document.getElementById("queryInput").value.trim();
+        if (!query) return;
+
+        document.getElementById("resultsSection").classList.remove("hidden");
+
+        try {
+          const [bm25Res, customRes] = await Promise.all([
+            fetch(
+              `http://127.0.0.1:5000/search_es_pr?query=${encodeURIComponent(query)}`,
+            ),
+            fetch(
+              `http://127.0.0.1:5000/search_custom?query=${encodeURIComponent(query)}`,
+            ),
+          ]);
+
+          const bm25Data = await bm25Res.json();
+          const customData = await customRes.json();
+
+          renderResults(bm25Data.results, "bm25Results", query);
+          renderResults(customData.results, "tfidfResults", query);
+
+          document.getElementById("infoLeft").innerText =
+            `About ${bm25Data.results.length} results (${bm25Data.elapse.toFixed(3)} seconds)`;
+
+          document.getElementById("infoRight").innerText =
+            `About ${customData.results.length} results (${customData.elapse.toFixed(3)} seconds)`;
+        } catch (error) {
+          console.error("Error fetching data:", error);
+        }
+      }
+    </script>
+  </body>
+</html>
